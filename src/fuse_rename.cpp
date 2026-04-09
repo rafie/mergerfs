@@ -264,7 +264,7 @@ _rename_exdev_rel_symlink(const fuse_req_ctx_t *ctx_,
   target   /= oldfusepath_;
   target    = target.lexically_relative(linkpath.parent_path());
 
-  rv = FUSE::symlink(ctx_,target.c_str(),linkpath);
+  rv = FUSE::symlink(ctx_,target.string().c_str(),linkpath);
   if(rv < 0)
     ::_rename_exdev_rename_back(branches,oldfusepath_);
 
@@ -294,7 +294,7 @@ _rename_exdev_abs_symlink(const fuse_req_ctx_t *ctx_,
   target   /= ".mergerfs_rename_exdev";
   target   /= oldfusepath_;
 
-  rv = FUSE::symlink(ctx_,target.c_str(),linkpath);
+  rv = FUSE::symlink(ctx_,target.string().c_str(),linkpath);
   if(rv < 0)
     ::_rename_exdev_rename_back(branches,oldfusepath_);
 

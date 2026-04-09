@@ -41,7 +41,10 @@ namespace fs
   lchmod(const char   *pathname_,
          const mode_t  mode_)
   {
-#if defined __linux__
+#if defined _WIN32
+    /* Windows has no symlink-specific chmod; use regular chmod */
+    return ::to_neg_errno(::chmod(pathname_,mode_));
+#elif defined __linux__
     int rv;
     const int flags = AT_SYMLINK_NOFOLLOW;
 

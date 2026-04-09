@@ -103,7 +103,7 @@ _movefile_and_open(const Policy::Create &createFunc_,
   src_filepath = src_branch / fusepath_;
   dst_filepath = dst_branch[0]->path / fusepath_;
 
-  rv = fs::copyfile(src_filepath,dst_filepath,{.cleanup_failure = true});
+  rv = fs::copyfile(src_filepath,dst_filepath,{true});
   if(rv < 0)
     return -ENOSPC;
 

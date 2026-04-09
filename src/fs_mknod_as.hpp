@@ -62,6 +62,22 @@ namespace fs
     return rv;
   }
 }
+#elif defined(_WIN32)
+namespace fs
+{
+  template<typename T>
+  static
+  inline
+  int
+  mknod_as(const ugid_t  ugid_,
+           const T      &path_,
+           const mode_t  mode_,
+           const dev_t   dev_)
+  {
+    (void)ugid_;
+    return fs::mknod(path_,mode_,dev_);
+  }
+}
 #else
 #error "Not Supported!"
 #endif

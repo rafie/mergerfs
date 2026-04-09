@@ -26,6 +26,10 @@
 #include "fmt/core.h"
 #include "fmt/ranges.h"
 #include "scope_guard/scope_guard.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#include "compat/win32_undef.h"
+#endif
 #include "subprocess/subprocess.hpp"
 
 #include <stdio.h>

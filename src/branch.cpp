@@ -41,7 +41,7 @@ Branch::to_string(void) const
 {
   std::string rv;
 
-  rv  = path;
+  rv  = path.string();
   rv += '=';
   switch(mode)
     {

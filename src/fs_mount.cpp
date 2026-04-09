@@ -18,6 +18,10 @@
 
 #include "fs_mount.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#include "compat/win32_undef.h"
+#endif
 #include "subprocess/subprocess.hpp"
 
 

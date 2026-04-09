@@ -23,6 +23,9 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 namespace fs
 {
@@ -60,7 +63,7 @@ namespace fs
           const mode_t    mode_)
   {
     return fs::mkdirat(dirfd_,
-                       pathname_.c_str(),
+                       pathname_.string().c_str(),
                        mode_);
   }
 }

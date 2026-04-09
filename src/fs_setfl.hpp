@@ -19,6 +19,9 @@
 #pragma once
 
 #include <fcntl.h>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 
 namespace fs

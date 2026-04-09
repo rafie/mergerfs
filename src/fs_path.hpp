@@ -19,9 +19,36 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 
 namespace fs
 {
+#ifdef _WIN32
+  /*
+   * On MSVC/Windows, std::filesystem::path::operator string_type()
+   * returns std::wstring, not std::string.  GCC/POSIX returns std::string.
+   * Wrap the type to add an implicit std::string conversion so existing
+   * code that passes fs::path to functions taking const std::string& works.
+   */
+  class path : public std::filesystem::path
+  {
+  public:
+    using std::filesystem::path::path;
+    using std::filesystem::path::operator=;
+
+    /* Allow construction from base class (e.g. operator/ returns base) */
+    path(const std::filesystem::path &p) : std::filesystem::path(p) {}
+    path(std::filesystem::path &&p) : std::filesystem::path(std::move(p)) {}
+
+    /* Allow assignment from base class */
+    path& operator=(const std::filesystem::path &p) { std::filesystem::path::operator=(p); return *this; }
+    path& operator=(std::filesystem::path &&p) { std::filesystem::path::operator=(std::move(p)); return *this; }
+
+    /* Bring parity with GCC where path implicitly converts to std::string */
+    operator std::string() const { return this->string(); }
+  };
+#else
   using path = std::filesystem::path;
+#endif
 }

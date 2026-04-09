@@ -271,6 +271,13 @@
  * supported minor version).
  */
 
+/* Windows SDK sal.h defines __reserved as empty — undef to fix struct fields */
+#ifdef _WIN32
+#ifdef __reserved
+#undef __reserved
+#endif
+#endif
+
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 7
 

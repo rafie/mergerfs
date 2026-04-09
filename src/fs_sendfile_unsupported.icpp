@@ -19,6 +19,9 @@
 #include "errno.hpp"
 
 #include <sys/types.h>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 
 ssize_t

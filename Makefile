@@ -14,12 +14,21 @@
 
 $(info mergerfs MAKEFLAGS: $(MAKEFLAGS))
 
-ifeq ($(shell id -u),0)
-FAKEROOT ?=
+###############################################################################
+# Platform detection
+###############################################################################
+UNAME_S := $(shell uname -s)
+ifneq (,$(findstring MINGW,$(UNAME_S))$(findstring MSYS,$(UNAME_S)))
+PLATFORM := windows
+else
+PLATFORM := linux
 endif
+$(info mergerfs PLATFORM: $(PLATFORM))
 
+###############################################################################
+# Common tool defaults
+###############################################################################
 CP        ?= cp
-FAKEROOT  ?= fakeroot
 FIND 	  ?= find
 GIT 	  ?= git
 GIT2DEBCL ?= buildtools/git2debcl
@@ -30,7 +39,6 @@ MKTEMP    ?= mktemp
 MV        ?= mv
 RM 	  ?= rm
 SED       ?= sed
-STRIP     ?= strip
 TAR 	  ?= tar
 TOUCH 	  ?= touch
 
@@ -48,6 +56,153 @@ endif
 
 USE_XATTR ?= 1
 UGID_USE_RWLOCK ?= 0
+
+SRC  := $(wildcard src/*.cpp)
+
+###############################################################################
+# WinFSP SDK location (Windows only)
+###############################################################################
+WINFSP_PREFIX ?= c:/root/dev/libs/winfsp
+
+###############################################################################
+# Platform-specific compiler/linker configuration
+###############################################################################
+ifeq ($(PLATFORM),windows)
+#-----------------------------------------------------------------------------
+# Windows: MSVC (cl.exe / link.exe) invoked from MSYS shell
+#-----------------------------------------------------------------------------
+
+CXX      := cl
+CC       := cl
+LINK     := link
+OBJ_EXT  := .obj
+EXE_EXT  := .exe
+
+ifdef NDEBUG
+MSVC_OPT := -O2 -DNDEBUG
+else
+MSVC_OPT := -Od -Zi -RTC1 -DDEBUG
+endif
+
+override CXXFLAGS := \
+	-nologo \
+	-std:c++17 \
+	-EHsc \
+	-utf-8 \
+	-FS \
+	-permissive- \
+	-W3 \
+	-wd4244 -wd4267 -wd4018 -wd4101 -wd4804 -wd4800 -wd4065 \
+	-FIoff_t_fix.h \
+	$(MSVC_OPT) \
+	-c
+
+override CPPFLAGS := \
+	-D_FILE_OFFSET_BITS=64 \
+	-DBOOST_UNORDERED_DISABLE_PARALLEL_ALGORITHMS \
+	-DWIN32 \
+	-D_WIN64 \
+	-DUNICODE \
+	-D_UNICODE \
+	-DNOMINMAX
+
+override INC_FLAGS := \
+	-Isrc/compat \
+	-Isrc \
+	-Ivendored \
+	-Ivendored/libfuse/include \
+	-I$(WINFSP_PREFIX)/inc
+
+override MFS_FLAGS := \
+	-DUSE_XATTR=$(USE_XATTR) \
+	-DUGID_USE_RWLOCK=$(UGID_USE_RWLOCK)
+
+# Linker flags
+WINFSP_LIB := $(WINFSP_PREFIX)/lib/winfsp-x64.lib
+override LDFLAGS := -nologo -DEBUG
+override LDLIBS  := $(WINFSP_LIB)
+
+# Object/dep file paths
+OBJS := $(SRC:src/%.cpp=$(BUILDDIR)/.objs/%.cpp$(OBJ_EXT))
+
+# Tests
+TESTS      := $(wildcard tests/*.cpp)
+TESTS_OBJS := $(filter-out $(BUILDDIR)/.objs/mergerfs.cpp$(OBJ_EXT),$(OBJS))
+TESTS_OBJS += $(TESTS:tests/%.cpp=$(BUILDDIR)/.test_objs/%.cpp$(OBJ_EXT))
+override TESTS_FLAGS := \
+	-Isrc \
+	-Ivendored \
+	-Ivendored/acutest \
+	-DTESTS
+
+MANPAGE := mergerfs.1
+
+#-- Top-level targets ---------------------------------------------------------
+.PHONY: all
+all: $(BUILDDIR)/mergerfs$(EXE_EXT)
+
+$(BUILDDIR)/mergerfs$(EXE_EXT): src/version.hpp $(OBJS)
+	$(LINK) $(LDFLAGS) -OUT:$@ $(OBJS) $(LDLIBS)
+
+$(BUILDDIR)/tests$(EXE_EXT): $(BUILDDIR)/mergerfs$(EXE_EXT) $(TESTS_OBJS)
+	$(LINK) $(LDFLAGS) -OUT:$@ $(TESTS_OBJS) $(LDLIBS)
+
+tests: $(BUILDDIR)/tests$(EXE_EXT)
+
+#-- Compile rules -------------------------------------------------------------
+$(BUILDDIR)/.objs/%.cpp$(OBJ_EXT): src/%.cpp $(BUILDDIR)/stamp
+	$(CXX) $(CXXFLAGS) $(INC_FLAGS) $(MFS_FLAGS) $(CPPFLAGS) -Fo$@ $<
+
+$(BUILDDIR)/.test_objs/%.cpp$(OBJ_EXT): tests/%.cpp $(BUILDDIR)/stamp
+	$(CXX) $(CXXFLAGS) $(TESTS_FLAGS) $(INC_FLAGS) $(MFS_FLAGS) $(CPPFLAGS) -Fo$@ $<
+
+#-- Utility -------------------------------------------------------------------
+$(BUILDDIR)/stamp:
+	$(MKDIR) -p $(BUILDDIR)/.objs
+	$(MKDIR) -p $(BUILDDIR)/.test_objs
+	$(TOUCH) $@
+
+.PHONY: version
+version: src/version.hpp
+
+src/version.hpp:
+	./buildtools/update-version
+
+.PHONY: clean
+clean:
+	$(RM) -rf $(BUILDDIR)
+
+.PHONY: distclean
+distclean: clean
+ifdef GIT_REPO
+	$(GIT) clean -xfd
+endif
+
+.PHONY: help
+help:
+	@echo "usage: make [NDEBUG=1] [target]"
+	@echo ""
+	@echo "  Platform: $(PLATFORM) (MSVC)"
+	@echo "  WinFSP:   $(WINFSP_PREFIX)"
+	@echo ""
+	@echo "Targets:"
+	@echo "  all       - build mergerfs.exe (default)"
+	@echo "  tests     - build test runner"
+	@echo "  clean     - remove build artifacts"
+	@echo "  help      - this message"
+
+else
+#-----------------------------------------------------------------------------
+# Linux: GCC/Clang (original upstream build)
+#-----------------------------------------------------------------------------
+OBJ_EXT := .o
+EXE_EXT :=
+
+ifeq ($(shell id -u),0)
+FAKEROOT ?=
+endif
+FAKEROOT  ?= fakeroot
+STRIP     ?= strip
 
 ifdef NDEBUG
 OPT_FLAGS := -O2 -DNDEBUG
@@ -81,7 +236,6 @@ else
 LTO_FLAGS :=
 endif
 
-SRC  := $(wildcard src/*.cpp)
 OBJS := $(SRC:src/%.cpp=build/.objs/%.cpp.o)
 DEPS := $(SRC:src/%.cpp=build/.objs/%.cpp.d)
 
@@ -392,5 +546,6 @@ tags:
 	find . -name "*.cpp" -print | etags --append -
 	find . -name "*.hpp" -print | etags --append -
 
-
 -include $(DEPS)
+
+endif # PLATFORM

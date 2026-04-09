@@ -21,6 +21,10 @@
 #include <cstdint>
 
 #include <stddef.h>
+
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 #include <sys/types.h>
 
 

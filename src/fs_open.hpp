@@ -25,6 +25,9 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 
 namespace fs

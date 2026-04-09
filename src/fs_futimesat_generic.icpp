@@ -20,6 +20,9 @@
 
 #include <fcntl.h>
 #include <sys/time.h>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 
 namespace fs

@@ -23,6 +23,9 @@
 #if defined __linux__
 #include <unistd.h>
 #include <sys/syscall.h>
+#elif defined _WIN32
+#include <unistd.h>
+#include <errno.h>
 #endif
 
 

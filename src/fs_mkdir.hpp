@@ -60,7 +60,7 @@ namespace fs
   mkdir(const fs::path &path_,
         const mode_t    mode_)
   {
-    return fs::mkdir(path_.c_str(),
+    return fs::mkdir(path_.string().c_str(),
                      mode_);
   }
 }

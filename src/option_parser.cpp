@@ -338,7 +338,7 @@ namespace options
     if(!cfg.errs.empty())
       return;
 
-    fuse_opt_add_arg(args_,cfg.mountpoint.c_str());
+    fuse_opt_add_arg(args_,cfg.mountpoint.string().c_str());
 
     ::_postprocess_and_print_warnings();
     ::_check_for_mount_loop();

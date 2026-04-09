@@ -21,6 +21,9 @@
 #include "to_neg_errno.hpp"
 
 #include <fcntl.h>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 namespace fs
 {

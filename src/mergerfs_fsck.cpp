@@ -251,7 +251,7 @@ _copy_files(const std::string &src_,
       if(src_ == dst.path)
         continue;
 
-      rv = fs::copyfile(src_,dst.path,{.cleanup_failure=false});
+      rv = fs::copyfile(src_,dst.path,{false});
       if(rv < 0)
         fmt::print(stderr,
                    "ERROR: failed copying to {} - {}",
@@ -387,19 +387,19 @@ _fsck(const FS::path &path_,
   int rv;
   PathStatVec paths;
 
-  ::_get_allpaths(path_,paths);
-  ::_compare_files(path_,paths,fix_func_,check_size_,copy_file_);
+  ::_get_allpaths(path_.string(),paths);
+  ::_compare_files(path_.string(),paths,fix_func_,check_size_,copy_file_);
 
   auto opts = FS::directory_options::skip_permission_denied;
   auto rdi = FS::recursive_directory_iterator(path_,opts);
   for(const auto &de : rdi)
     {
       paths.clear();
-      rv = ::_get_allpaths(de.path(),paths);
+      rv = ::_get_allpaths(de.path().string(),paths);
       if(rv < 0)
         continue;
 
-      ::_compare_files(de.path(),
+      ::_compare_files(de.path().string(),
                        paths,
                        fix_func_,
                        check_size_,

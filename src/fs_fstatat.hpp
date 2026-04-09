@@ -53,6 +53,20 @@ namespace fs
           const int       flags_)
   {
     return fs::fstatat(dirfd_,
+                       pathname_.string().c_str(),
+                       statbuf_,
+                       flags_);
+  }
+
+  static
+  inline
+  int
+  fstatat(const int          dirfd_,
+          const std::string &pathname_,
+          struct stat       *statbuf_,
+          const int          flags_)
+  {
+    return fs::fstatat(dirfd_,
                        pathname_.c_str(),
                        statbuf_,
                        flags_);

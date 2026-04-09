@@ -332,7 +332,7 @@ namespace l
         for(auto pi = patterns.cbegin(); pi != patterns.cend() && match != 0; ++pi)
           {
             match = ::fnmatch(pi->c_str(),
-                              branch.path.c_str(),
+                              branch.path.string().c_str(),
                               0);
           }
 
@@ -479,7 +479,7 @@ SrcMounts::to_string(void) const
 
   for(const auto &branch : *branches)
     {
-      rv += branch.path;
+      rv += branch.path.string();
       rv += ':';
     }
 

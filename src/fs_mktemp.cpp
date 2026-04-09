@@ -47,7 +47,7 @@ _generate_tmp_path(const fs::path    &dirpath_,
   size_t substr_len;
   std::string tmp_filename;
 
-  name_max = ::pathconf(dirpath_.c_str(),_PC_NAME_MAX);
+  name_max = ::pathconf(dirpath_.string().c_str(),_PC_NAME_MAX);
   if(name_max == -1)
     name_max = NAME_MAX;
 

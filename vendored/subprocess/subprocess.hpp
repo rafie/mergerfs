@@ -73,7 +73,11 @@ extern "C" {
    */
 
   #ifdef __USING_WINDOWS__
-  
+
+  #ifdef _WINDOWS_  /* <windows.h> already included */
+  #include <io.h>
+  #include <cwchar>
+  #else  /* provide minimal declarations */
   #define CONST const
   #define WINAPI __stdcall
   
@@ -185,6 +189,7 @@ extern "C" {
 
   #include <io.h>
   #include <cwchar>
+  #endif /* _WINDOWS_ else (minimal declarations) */
 #else
   #include <sys/wait.h>
   #include <unistd.h>

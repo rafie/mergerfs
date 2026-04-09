@@ -217,7 +217,7 @@ _link_exdev_rel_symlink(const fuse_req_ctx_t *ctx_,
 
   target = target.lexically_relative(linkpath.parent_path());
 
-  rv = FUSE::symlink(ctx_,target.c_str(),linkpath);
+  rv = FUSE::symlink(ctx_,target.string().c_str(),linkpath);
   if(rv == 0)
     rv = FUSE::getattr(ctx_,oldpath_,st_,timeouts_);
 
@@ -248,7 +248,7 @@ _link_exdev_abs_base_symlink(const fuse_req_ctx_t *ctx_,
 
   target = obranches[0]->path / oldpath_;
 
-  rv = FUSE::symlink(ctx_,target.c_str(),newpath_);
+  rv = FUSE::symlink(ctx_,target.string().c_str(),newpath_);
   if(rv == 0)
     rv = FUSE::getattr(ctx_,oldpath_,st_,timeouts_);
 
@@ -274,7 +274,7 @@ _link_exdev_abs_pool_symlink(const fuse_req_ctx_t *ctx_,
 
   target = mount_ / oldpath_;
 
-  rv = FUSE::symlink(ctx_,target.c_str(),newpath_);
+  rv = FUSE::symlink(ctx_,target.string().c_str(),newpath_);
   if(rv == 0)
     rv = FUSE::getattr(ctx_,oldpath_,st_,timeouts_);
 

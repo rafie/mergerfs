@@ -7,6 +7,10 @@
 
 #include <pthread.h>
 
+#ifdef _WIN32
+#include <unistd.h>
+#endif
+
 #ifndef PTHREAD_MUTEX_ADAPTIVE_NP
 # define PTHREAD_MUTEX_ADAPTIVE_NP PTHREAD_MUTEX_NORMAL
 #endif

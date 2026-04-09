@@ -50,8 +50,8 @@ _read_cfg(const std::string_view  str_,
 
   concurrency     = 0;
   max_queue_depth = 0;
-  matched = std::regex_match(str_.begin(),
-                             str_.end(),
+  matched = std::regex_match(str_.data(),
+                             str_.data() + str_.size(),
                              match,
                              re);
   if(matched)

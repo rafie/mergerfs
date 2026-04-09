@@ -22,6 +22,9 @@
 
 #include <string>
 #include <vector>
+#ifdef _WIN32
+#include <unistd.h>
+#endif
 
 
 void

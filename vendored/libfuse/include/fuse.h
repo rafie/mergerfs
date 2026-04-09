@@ -23,6 +23,10 @@
 #include <sys/uio.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+#include <unistd.h>
+#endif
+
 EXTERN_C_BEGIN
 
 /* ----------------------------------------------------------- *

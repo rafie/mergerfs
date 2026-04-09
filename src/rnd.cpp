@@ -27,10 +27,9 @@
 
 static u64 G_SEED;
 
-__attribute__((constructor))
 static
 void
-_constructor()
+_rnd_init()
 {
   struct timeval tv;
 
@@ -40,6 +39,14 @@ _constructor()
   G_SEED <<= 32;
   G_SEED  |= tv.tv_usec;
 }
+
+#ifdef _MSC_VER
+/* MSVC: auto-init via static object */
+static struct _rnd_auto_init { _rnd_auto_init() { _rnd_init(); } } _rnd_auto_init_obj;
+#else
+static void _constructor() __attribute__((constructor));
+static void _constructor() { _rnd_init(); }
+#endif
 
 // Lifted from wyhash.h's wyrand()
 static

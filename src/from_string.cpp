@@ -25,6 +25,10 @@
 
 #include <stdlib.h>
 
+#ifdef _WIN32
+#include <unistd.h>
+#endif
+
 
 int
 str::from(const std::string_view  value_,
@@ -55,8 +59,8 @@ str::from(const std::string_view  val_,
   int tmp;
   const int base = 10;
 
-  auto [ptr,ec] = std::from_chars(val_.begin(),
-                                  val_.end(),
+  auto [ptr,ec] = std::from_chars(val_.data(),
+                                  val_.data() + val_.size(),
                                   tmp,
                                   base);
   if(ec != std::errc{})
@@ -78,14 +82,14 @@ str::from(const std::string_view  val_,
   constexpr s64 G = M * 1024LL;
   constexpr s64 T = G * 1024LL;
 
-  auto [ptr,ec] = std::from_chars(val_.begin(),
-                                  val_.end(),
+  auto [ptr,ec] = std::from_chars(val_.data(),
+                                  val_.data() + val_.size(),
                                   tmp,
                                   base);
 
   if(ec != std::errc{})
     return -EINVAL;
-  if(ptr == val_.end())
+  if(ptr == val_.data() + val_.size())
     {
       *rv_ = tmp;
       return 0;
@@ -140,14 +144,14 @@ str::from(const std::string_view  val_,
   constexpr u64 G = M * 1024ULL;
   constexpr u64 T = G * 1024ULL;
 
-  auto [ptr,ec] = std::from_chars(val_.begin(),
-                                  val_.end(),
+  auto [ptr,ec] = std::from_chars(val_.data(),
+                                  val_.data() + val_.size(),
                                   tmp,
                                   base);
 
   if(ec != std::errc{})
     return -EINVAL;
-  if(ptr == val_.end())
+  if(ptr == val_.data() + val_.size())
     {
       *rv_ = tmp;
       return 0;

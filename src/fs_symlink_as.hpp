@@ -62,6 +62,21 @@ namespace fs
     return 0;
   }
 }
+#elif defined(_WIN32)
+namespace fs
+{
+  template<typename T>
+  static
+  inline
+  int
+  symlink_as(const ugid_t  ugid_,
+             const char   *target_,
+             const T      &linkpath_)
+  {
+    (void)ugid_;
+    return fs::symlink(target_,linkpath_);
+  }
+}
 #else
 #error "Not Supported!"
 #endif

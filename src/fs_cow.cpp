@@ -74,5 +74,5 @@ fs::cow::break_link(const fs::path &src_filepath_)
 {
   return fs::copyfile(src_filepath_,
                       src_filepath_,
-                      { .cleanup_failure = true });
+                      {true});
 }

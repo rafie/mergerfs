@@ -49,5 +49,18 @@ fs::open_fd(const int fd_,
   return fs::openat(fd_,"",flags);
 }
 #else
-#error "fs::open_fd() not supported on platform"
+/* Windows: reopen fd via _dup */
+#include <io.h>
+#include <errno.h>
+
+int
+fs::open_fd(const int fd_,
+            const int flags_)
+{
+  (void)flags_;
+  int newfd = _dup(fd_);
+  if(newfd < 0)
+    return -errno;
+  return newfd;
+}
 #endif

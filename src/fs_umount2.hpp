@@ -21,7 +21,9 @@
 #include "errno.hpp"
 #include "to_neg_errno.hpp"
 
-#ifdef __FreeBSD__
+#ifdef _WIN32
+/* No mount/unmount on Windows — WinFSP handles this */
+#elif defined(__FreeBSD__)
 # include <sys/param.h>
 # include <sys/mount.h>
 # define umount2(target,flags) unmount(target,flags)
@@ -40,12 +42,18 @@ namespace fs
   umount2(const std::string target_,
           const int         flags_)
   {
+#ifdef _WIN32
+    (void)target_; (void)flags_;
+    /* TODO: implement via WinFSP unmount */
+    return -ENOSYS;
+#else
     int rv;
 
     rv = ::umount2(target_.c_str(),
                    flags_);
 
     return ::to_neg_errno(rv);
+#endif
   }
 
   static

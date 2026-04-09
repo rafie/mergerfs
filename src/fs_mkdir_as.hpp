@@ -63,5 +63,19 @@ namespace fs
   }
 }
 #else
-#error "Not Supported"
+/* Windows: no uid/gid, just mkdir */
+namespace fs
+{
+  template<typename T>
+  static
+  inline
+  int
+  mkdir_as(const ugid_t  ugid_,
+           const T      &path_,
+           const mode_t  mode_)
+  {
+    (void)ugid_;
+    return fs::mkdir(path_,mode_);
+  }
+}
 #endif

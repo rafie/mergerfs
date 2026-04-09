@@ -69,6 +69,21 @@ namespace fs
     return rv;
   }
 }
+#elif defined(_WIN32)
+namespace fs
+{
+  static
+  inline
+  int
+  open_as(const ugid_t    ugid_,
+          const fs::path &path_,
+          const int       flags_,
+          const mode_t    mode_)
+  {
+    (void)ugid_;
+    return fs::open(path_,flags_,mode_);
+  }
+}
 #else
 #error "Not Supported!"
 #endif
