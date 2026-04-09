@@ -47,6 +47,58 @@ namespace fs
 
     /* Bring parity with GCC where path implicitly converts to std::string */
     operator std::string() const { return this->string(); }
+
+    /*
+     * Override operator/ to handle FUSE absolute paths correctly.
+     * FUSE paths always start with "/" (e.g. "/", "/foo/bar").
+     * On Windows, std::filesystem::path treats "/" as absolute (root of
+     * current drive), which would replace the left operand entirely.
+     * Instead, we want: branch_path / "/foo" → branch_path\foo
+     */
+    path& operator/=(const path &rhs)
+    {
+      std::string r = rhs.string();
+      if(!r.empty() && (r[0] == '/' || r[0] == '\\'))
+        {
+          size_t pos = r.find_first_not_of("/\\");
+          if(pos == std::string::npos)
+            return *this;
+          r = r.substr(pos);
+        }
+      std::filesystem::path::operator/=(std::filesystem::path(r));
+      return *this;
+    }
+
+    path& operator/=(const std::string &rhs)
+    {
+      return this->operator/=(path(rhs));
+    }
+
+    path& operator/=(const char *rhs)
+    {
+      return this->operator/=(path(rhs));
+    }
+
+    friend path operator/(const path &lhs, const path &rhs)
+    {
+      path result(lhs);
+      result /= rhs;
+      return result;
+    }
+
+    friend path operator/(const path &lhs, const std::string &rhs)
+    {
+      path result(lhs);
+      result /= rhs;
+      return result;
+    }
+
+    friend path operator/(const path &lhs, const char *rhs)
+    {
+      path result(lhs);
+      result /= rhs;
+      return result;
+    }
   };
 #else
   using path = std::filesystem::path;

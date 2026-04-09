@@ -23,6 +23,7 @@
 #include "fs_glob.hpp"
 #include "fs_is_rofs.hpp"
 #include "fs_realpathize.hpp"
+#include "msys_path.hpp"
 #include "base_types.h"
 #include "num.hpp"
 #include "str.hpp"
@@ -191,6 +192,10 @@ namespace l
 
     if(minfreespace.has_value())
       branch._minfreespace = minfreespace.value();
+
+#ifdef _WIN32
+    glob = msys_path::to_native(glob);
+#endif
 
     fs::glob(glob,&paths);
     if(paths.empty())

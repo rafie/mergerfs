@@ -14,8 +14,6 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#define FMT_HEADER_ONLY
-
 #include "config.hpp"
 #include "ef.hpp"
 #include "errno.hpp"

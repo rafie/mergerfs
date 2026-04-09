@@ -72,7 +72,7 @@ namespace fs
            const int       flags_)
   {
     return fs::fchmodat(dirfd_,
-                        pathname_.c_str(),
+                        pathname_.string().c_str(),
                         mode_,
                         flags_);
   }

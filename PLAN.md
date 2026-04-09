@@ -133,19 +133,19 @@ native_to_msys("D:\\media\\files")     → "/d/media/files"
 
 ## Phase 2: FUSE Operation Porting
 
-### Tier 1 — Minimum Viable Mount
+### Tier 1 — Minimum Viable Mount ✅ COMPLETE
 
 Get a read-only merged view working first:
 
-- [ ] `init` / `destroy` — startup/shutdown
-- [ ] `getattr` — file metadata (`struct stat` mapping)
-- [ ] `opendir` / `readdir` / `releasedir` — directory listing with merge logic
-- [ ] `open` / `release` — file open/close
-- [ ] `read` — file reading
-- [ ] `statfs` — volume information
-- [ ] `access` — permission checks
+- [x] `init` / `destroy` — startup/shutdown
+- [x] `getattr` — file metadata (`struct stat` mapping)
+- [x] `opendir` / `readdir` / `releasedir` — directory listing with merge logic
+- [x] `open` / `release` — file open/close
+- [x] `read` — file reading
+- [x] `statfs` — volume information
+- [x] `access` — permission checks
 
-**Milestone: mount two directories as a single drive letter and browse in Explorer.**
+**Milestone: mount two directories as a single drive letter and browse in Explorer. ✅ Achieved 2026-04-09**
 
 ### Tier 2 — Read-Write Support
 

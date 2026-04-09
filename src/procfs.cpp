@@ -41,6 +41,10 @@ static constexpr const char PROCFS_PATH[] = "/proc";
 void
 procfs::init()
 {
+#ifdef _WIN32
+  // /proc does not exist on Windows — skip entirely
+  return;
+#else
   if(g_PROCFS_DIR_FD >= 0)
     return;
 
@@ -55,11 +59,15 @@ procfs::init()
   if(procfs::PROC_SELF_FD_FD < 0)
     fatal::abort("failed to open /proc/self/fd: {}",strerror(-procfs::PROC_SELF_FD_FD));
 #endif
+#endif
 }
 
 void
 procfs::shutdown()
 {
+#ifdef _WIN32
+  return;
+#else
   if(g_PROCFS_DIR_FD >= 0)
     {
       fs::close(g_PROCFS_DIR_FD);
@@ -72,11 +80,16 @@ procfs::shutdown()
       procfs::PROC_SELF_FD_FD = -1;
     }
 #endif
+#endif
 }
 
 std::string
 procfs::get_name(const int tid_)
 {
+#ifdef _WIN32
+  (void)tid_;
+  return {};
+#else
   int fd;
   int rv;
   std::array<char,256> commpath;
@@ -104,4 +117,5 @@ procfs::get_name(const int tid_)
     commpath[rv] = '\0';
 
   return commpath.data();
+#endif
 }

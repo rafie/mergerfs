@@ -67,7 +67,7 @@ namespace fs
          const mode_t    mode_ = 0)
   {
     return fs::openat(dirfd_,
-                      pathname_.c_str(),
+                      pathname_.string().c_str(),
                       flags_,
                       mode_);
   }

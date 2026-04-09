@@ -47,6 +47,6 @@ namespace fs
   eaccess(const fs::path &path_,
           const int       mode_)
   {
-    return fs::eaccess(path_.c_str(),mode_);
+    return fs::eaccess(path_.string().c_str(),mode_);
   }
 }

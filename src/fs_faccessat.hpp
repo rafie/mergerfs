@@ -70,7 +70,7 @@ namespace fs
             const int       flags_)
   {
     return fs::faccessat(dirfd_,
-                         path_.c_str(),
+                         path_.string().c_str(),
                          mode_,
                          flags_);
   }
