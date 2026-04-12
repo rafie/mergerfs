@@ -147,20 +147,26 @@ Get a read-only merged view working first:
 
 **Milestone: mount two directories as a single drive letter and browse in Explorer. ✅ Achieved 2026-04-09**
 
-### Tier 2 — Read-Write Support
+### Tier 2 — Read-Write Support ✅ COMPLETE
 
-- [ ] `write` — file writing
-- [ ] `create` — file creation (policy-driven branch selection)
-- [ ] `mkdir` — directory creation
-- [ ] `unlink` / `rmdir` — deletion
-- [ ] `rename` — move/rename across branches
-- [ ] `truncate` / `ftruncate` — resize files
-- [ ] `chmod` / `chown` — permissions (best-effort on Windows)
-- [ ] `utimens` — timestamps
-- [ ] `flush` / `fsync` / `fsyncdir` — sync to disk
-- [ ] `symlink` / `readlink` / `link` — links
+- [x] `write` — file writing
+- [x] `create` — file creation (policy-driven branch selection)
+- [x] `mkdir` — directory creation
+- [x] `unlink` / `rmdir` — deletion
+- [x] `rename` — move/rename across branches
+- [x] `truncate` / `ftruncate` — resize files
+- [x] `chmod` / `chown` — permissions (best-effort on Windows)
+- [x] `utimens` — timestamps
+- [x] `flush` / `fsync` / `fsyncdir` — sync to disk
+- [x] `symlink` / `readlink` / `link` — links
 
-**Milestone: full read-write filesystem; can create, modify, delete files.**
+**Milestone: full read-write filesystem; can create, modify, delete files. ✅ Achieved 2026-04-10**
+
+#### Key Windows adaptations for Tier 2:
+- **`open()` with FILE_SHARE_DELETE**: Compat `open()` replaced `_open()` with `CreateFileA` + `_open_osfhandle`, always including `FILE_SHARE_DELETE` in the sharing mode. This enables POSIX-like unlink/rename while files are open.
+- **POSIX-semantics unlink**: `fs::unlink` falls back to `SetFileInformationByHandle(FileDispositionInfoEx)` with `FILE_DISPOSITION_FLAG_POSIX_SEMANTICS` when CRT `_unlink` fails. Removes directory entry immediately even with open handles.
+- **POSIX-semantics rename**: `fs::rename` falls back to `SetFileInformationByHandle(FileRenameInfoEx)` with `FILE_RENAME_FLAG_POSIX_SEMANTICS | FILE_RENAME_FLAG_REPLACE_IF_EXISTS`. Handles atomic overwrite and open-handle rename.
+- **Unique inodes**: Compat `stat()`/`fstat()` use `GetFileInformationByHandle` to get NTFS file IDs instead of relying on `_stat64.st_ino` (always 0 on Windows). Fixes inode collision in the hybrid-hash inode calculator.
 
 ### Tier 3 — Advanced Features
 

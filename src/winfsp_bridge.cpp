@@ -262,7 +262,16 @@ winfsp_getattr(const char *path, struct fuse_stat *stbuf)
 
   int rv = g_ops.getattr(&ctx, path, &cs, timeout);
   if(rv == 0)
-    _compat_to_fuse_stat(&cs, stbuf);
+    {
+      // On Windows, override uid/gid to match the requesting user.
+      // WinFSP constructs Windows security descriptors from POSIX
+      // mode + uid/gid. If uid doesn't match the calling user's
+      // mapped UID, the owner permission bits won't apply, which
+      // causes unexpected "Permission denied" on writable files.
+      cs.st_uid = ctx.uid;
+      cs.st_gid = ctx.gid;
+      _compat_to_fuse_stat(&cs, stbuf);
+    }
 
   return rv;
 }

@@ -19,6 +19,9 @@
 #include <time.h>        /* struct timespec (MSVC 2015+ UCRT) */
 #include <string.h>      /* memset */
 #include <errno.h>
+#include <io.h>          /* _get_osfhandle */
+#include <windows.h>
+#include "win32_undef.h"
 
 /* ------------------------------------------------------------------ */
 /* POSIX types (guarded — compat/unistd.h uses the same guards)       */
@@ -223,12 +226,36 @@ _stat64_to_posix_stat(const struct _stat64 *src, struct stat *dst)
   dst->st_blocks       = (blkcnt_t)((src->st_size + 511) / 512);
 }
 
+/* Get a unique 64-bit file ID via GetFileInformationByHandle.
+   Returns 0 on failure (caller falls back to _stat64's st_ino). */
+static inline uint64_t _win32_file_id(const char *path)
+{
+  /* FILE_SHARE_DELETE=4 (undef'd by win32_undef.h) */
+  HANDLE h = CreateFileA(path, 0,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | 4,
+                         NULL, OPEN_EXISTING,
+                         FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  if(h == INVALID_HANDLE_VALUE)
+    return 0;
+  BY_HANDLE_FILE_INFORMATION info;
+  BOOL ok = GetFileInformationByHandle(h, &info);
+  CloseHandle(h);
+  if(!ok)
+    return 0;
+  return ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
+}
+
 static inline int stat(const char *path, struct stat *buf)
 {
   struct _stat64 tmp;
   int rv = _stat64(path, &tmp);
   if(rv == 0)
-    _stat64_to_posix_stat(&tmp, buf);
+    {
+      _stat64_to_posix_stat(&tmp, buf);
+      uint64_t fid = _win32_file_id(path);
+      if(fid)
+        buf->st_ino = fid;
+    }
   return rv;
 }
 
@@ -237,7 +264,16 @@ static inline int fstat(int fd, struct stat *buf)
   struct _stat64 tmp;
   int rv = _fstat64(fd, &tmp);
   if(rv == 0)
-    _stat64_to_posix_stat(&tmp, buf);
+    {
+      _stat64_to_posix_stat(&tmp, buf);
+      HANDLE h = (HANDLE)_get_osfhandle(fd);
+      if(h != INVALID_HANDLE_VALUE)
+        {
+          BY_HANDLE_FILE_INFORMATION info;
+          if(GetFileInformationByHandle(h, &info))
+            buf->st_ino = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
+        }
+    }
   return rv;
 }
 

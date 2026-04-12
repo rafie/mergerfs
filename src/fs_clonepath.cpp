@@ -77,8 +77,10 @@ fs::clonepath(const fs::path &srcpath_,
   if(relpath_.empty())
     return 0;
 
+  // Guard against infinite recursion: parent_path() of "/" is "/"
+  // on both Linux and Windows, which would recurse forever.
   dirname = relpath_.parent_path();
-  if(!dirname.empty())
+  if(!dirname.empty() && dirname != relpath_)
     {
       rv = fs::clonepath(srcpath_,dstpath_,dirname,return_metadata_errors_);
       if(rv < 0)

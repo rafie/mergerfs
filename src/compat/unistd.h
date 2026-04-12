@@ -12,10 +12,13 @@
 #include <direct.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <windows.h>
+#include "win32_undef.h"
 
 /* POSIX types not provided by MSVC */
 #ifndef _SSIZE_T_DEFINED
@@ -244,11 +247,19 @@ static inline gid_t getegid(void) { return 0; }
 
 /* lstat, fstat, fstatat, stat — now in compat/sys/stat.h */
 
-/* openat — simplified, ignores dirfd */
+/* openat — simplified, ignores dirfd, delegates to our open() */
 static inline int openat(int dirfd, const char *path, int flags, ...)
 {
   (void)dirfd;
-  return _open(path, flags);
+  if(flags & _O_CREAT)
+    {
+      va_list ap;
+      va_start(ap, flags);
+      int mode = va_arg(ap, int);
+      va_end(ap);
+      return open(path, flags, mode);
+    }
+  return open(path, flags);
 }
 
 /* fcntl — stub */
@@ -492,15 +503,91 @@ static inline int mkdirat(int dirfd, const char *path, mode_t mode)
   return _mkdir(path);
 }
 
+/* Open file using Win32 CreateFileA so we can include FILE_SHARE_DELETE
+   in the sharing mode.  This allows unlink/rename while the file is open
+   (matching POSIX semantics).  Returns a CRT file descriptor via
+   _open_osfhandle. */
 static inline int open(const char *path, int flags, ...)
 {
-  /* ignore mode on Windows */
-  return _open(path, flags);
+  DWORD access = 0;
+  DWORD creation = OPEN_EXISTING;
+  int osfFlags = 0;
+
+  /* Access mode */
+  if((flags & _O_RDWR) == _O_RDWR)
+    { access = GENERIC_READ | GENERIC_WRITE; osfFlags = _O_RDWR; }
+  else if(flags & _O_WRONLY)
+    { access = GENERIC_WRITE; osfFlags = _O_WRONLY; }
+  else
+    { access = GENERIC_READ; osfFlags = _O_RDONLY; }
+
+  /* Creation disposition */
+  if(flags & _O_CREAT)
+    {
+      if(flags & _O_EXCL)
+        creation = CREATE_NEW;
+      else if(flags & _O_TRUNC)
+        creation = CREATE_ALWAYS;
+      else
+        creation = OPEN_ALWAYS;
+    }
+  else if(flags & _O_TRUNC)
+    {
+      creation = TRUNCATE_EXISTING;
+    }
+
+  if(flags & _O_APPEND)
+    osfFlags |= _O_APPEND;
+
+  /* Always share read+write+delete so that unlink/rename work while open */
+  DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | 4 /*FILE_SHARE_DELETE*/;
+
+  HANDLE h = CreateFileA(path, access, shareMode,
+                         NULL, creation,
+                         FILE_ATTRIBUTE_NORMAL, NULL);
+  if(h == INVALID_HANDLE_VALUE)
+    {
+      /* Map common Win32 errors to errno */
+      DWORD err = GetLastError();
+      if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
+        errno = ENOENT;
+      else if(err == ERROR_ACCESS_DENIED)
+        errno = EACCES;
+      else if(err == ERROR_FILE_EXISTS || err == ERROR_ALREADY_EXISTS)
+        errno = EEXIST;
+      else
+        errno = EIO;
+      return -1;
+    }
+
+  /* If O_CREAT: apply POSIX mode (make read-only if no write bits) */
+  if((flags & _O_CREAT))
+    {
+      va_list ap;
+      va_start(ap, flags);
+      int mode = va_arg(ap, int);
+      va_end(ap);
+      if(!(mode & 0222))
+        {
+          /* Mark read-only via Win32 attribute */
+          SetFileAttributesA(path, FILE_ATTRIBUTE_READONLY);
+        }
+    }
+
+  int fd = _open_osfhandle((intptr_t)h, osfFlags);
+  if(fd < 0)
+    {
+      CloseHandle(h);
+      errno = EMFILE;
+      return -1;
+    }
+
+  return fd;
 }
 
 static inline int truncate(const char *path, int64_t length)
 {
-  int fd = _open(path, _O_RDWR);
+  int fd = open(path, _O_RDWR);
   if(fd < 0) return -1;
   int rv = _chsize_s(fd, length);
   _close(fd);
