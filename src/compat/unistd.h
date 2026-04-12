@@ -327,10 +327,39 @@ static inline char *realpath(const char *path, char *resolved)
   return _fullpath(resolved, path, PATH_MAX);
 }
 
-/* futimesat — stub, calls futimes */
+/* futimesat — set file timestamps by path using SetFileTime */
 static inline int futimesat(int dirfd, const char *path, const struct timeval tv[2])
 {
-  (void)dirfd; (void)path; (void)tv;
+  (void)dirfd;
+  if(!tv || !path)
+    return 0;
+  HANDLE h = CreateFileA(path,
+                         FILE_WRITE_ATTRIBUTES,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | 4,
+                         NULL, OPEN_EXISTING,
+                         FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  if(h == INVALID_HANDLE_VALUE)
+    {
+      errno = EACCES;
+      return -1;
+    }
+  /* Convert Unix epoch to Windows FILETIME */
+  uint64_t at = ((uint64_t)tv[0].tv_sec + 11644473600ULL) * 10000000ULL
+              + (uint64_t)tv[0].tv_usec * 10ULL;
+  uint64_t mt = ((uint64_t)tv[1].tv_sec + 11644473600ULL) * 10000000ULL
+              + (uint64_t)tv[1].tv_usec * 10ULL;
+  FILETIME atime, mtime;
+  atime.dwLowDateTime  = (DWORD)(at & 0xFFFFFFFF);
+  atime.dwHighDateTime = (DWORD)(at >> 32);
+  mtime.dwLowDateTime  = (DWORD)(mt & 0xFFFFFFFF);
+  mtime.dwHighDateTime = (DWORD)(mt >> 32);
+  BOOL ok = SetFileTime(h, NULL, &atime, &mtime);
+  CloseHandle(h);
+  if(!ok)
+    {
+      errno = EACCES;
+      return -1;
+    }
   return 0;
 }
 
@@ -435,22 +464,100 @@ static inline int getpriority(int which, int who)
 
 static inline int symlink(const char *target, const char *linkpath)
 {
-  (void)target; (void)linkpath;
-  /* TODO: implement via CreateSymbolicLink */
+  /* SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE = 0x2 (Win10 1703+ Developer Mode) */
+  DWORD flags = 0x2;
+  /* Check if target looks like a directory */
+  DWORD attrs = GetFileAttributesA(target);
+  if(attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
+    flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
+  if(CreateSymbolicLinkA(linkpath, target, flags))
+    return 0;
+  DWORD err = GetLastError();
+  if(err == ERROR_PRIVILEGE_NOT_HELD || err == ERROR_ACCESS_DENIED)
+    errno = EPERM;
+  else if(err == ERROR_ALREADY_EXISTS)
+    errno = EEXIST;
+  else if(err == ERROR_PATH_NOT_FOUND)
+    errno = ENOENT;
+  else
+    errno = EIO;
   return -1;
 }
 
 static inline ssize_t readlink(const char *path, char *buf, size_t bufsiz)
 {
-  (void)path; (void)buf; (void)bufsiz;
-  /* TODO: implement via DeviceIoControl FSCTL_GET_REPARSE_POINT */
-  return -1;
+  /* Open the reparse point (symlink) without following it */
+  HANDLE h = CreateFileA(path, 0,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | 4,
+                         NULL, OPEN_EXISTING,
+                         FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                         NULL);
+  if(h == INVALID_HANDLE_VALUE)
+    {
+      errno = ENOENT;
+      return -1;
+    }
+
+  /* Read the reparse point data */
+  char rdbuf[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
+  DWORD bytesReturned = 0;
+  BOOL ok = DeviceIoControl(h, FSCTL_GET_REPARSE_POINT, NULL, 0,
+                            rdbuf, sizeof(rdbuf), &bytesReturned, NULL);
+  CloseHandle(h);
+  if(!ok)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  /* Parse the REPARSE_DATA_BUFFER to extract the target path */
+  typedef struct {
+    ULONG  ReparseTag;
+    USHORT ReparseDataLength;
+    USHORT Reserved;
+    USHORT SubstituteNameOffset;
+    USHORT SubstituteNameLength;
+    USHORT PrintNameOffset;
+    USHORT PrintNameLength;
+    ULONG  Flags;
+    WCHAR  PathBuffer[1];
+  } SYMLINK_REPARSE_DATA;
+
+  SYMLINK_REPARSE_DATA *rd = (SYMLINK_REPARSE_DATA*)rdbuf;
+  if(rd->ReparseTag != IO_REPARSE_TAG_SYMLINK)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  WCHAR *target = rd->PathBuffer + (rd->PrintNameOffset / sizeof(WCHAR));
+  int targetLen = rd->PrintNameLength / sizeof(WCHAR);
+
+  /* Convert wide string to multibyte */
+  int len = WideCharToMultiByte(CP_ACP, 0, target, targetLen,
+                                buf, (int)bufsiz, NULL, NULL);
+  if(len <= 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  return (ssize_t)len;
 }
 
 static inline int link(const char *oldpath, const char *newpath)
 {
-  (void)oldpath; (void)newpath;
-  /* TODO: implement via CreateHardLink */
+  if(CreateHardLinkA(newpath, oldpath, NULL))
+    return 0;
+  DWORD err = GetLastError();
+  if(err == ERROR_ACCESS_DENIED)
+    errno = EPERM;
+  else if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
+    errno = ENOENT;
+  else if(err == ERROR_ALREADY_EXISTS)
+    errno = EEXIST;
+  else
+    errno = EIO;
   return -1;
 }
 
@@ -473,8 +580,10 @@ static inline int fchown(int fd, uid_t owner, gid_t group)
 
 static inline int chmod(const char *path, mode_t mode)
 {
-  (void)mode;
-  return _chmod(path, _S_IREAD | _S_IWRITE);
+  int msvc_mode = _S_IREAD;
+  if(mode & 0222)
+    msvc_mode |= _S_IWRITE;
+  return _chmod(path, msvc_mode);
 }
 
 static inline int fchmod(int fd, mode_t mode)

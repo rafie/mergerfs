@@ -271,6 +271,14 @@ winfsp_getattr(const char *path, struct fuse_stat *stbuf)
       cs.st_uid = ctx.uid;
       cs.st_gid = ctx.gid;
       _compat_to_fuse_stat(&cs, stbuf);
+
+      // When FSP_FUSE_CAP_STAT_EX is enabled, WinFSP passes a
+      // fuse_stat_ex* (larger than fuse_stat*). Set st_flags so
+      // WinFSP maps READONLY attribute correctly.
+      struct fuse_stat_ex *stex = (struct fuse_stat_ex *)stbuf;
+      stex->st_flags = 0;
+      if(!(cs.st_mode & 0222))
+        stex->st_flags |= 0x1000; /* FSP_FUSE_UF_READONLY */
     }
 
   return rv;
@@ -288,6 +296,10 @@ struct mergerfs_conn_info
 static void *
 winfsp_init(struct fuse_conn_info *conn)
 {
+  // Tell WinFSP we want stat_ex support so chflags gets called
+  // for file attribute changes (readonly, hidden, etc.)
+  conn->want |= (1 << 23); /* FSP_FUSE_CAP_STAT_EX */
+
   if(!g_ops.init) return NULL;
 
   // Create a dummy mergerfs conn_info with no capabilities.
@@ -621,6 +633,21 @@ winfsp_chmod(const char *path, fuse_mode_t mode)
 }
 
 static int
+winfsp_chflags(const char *path, uint32_t flags)
+{
+  if(!g_ops.chmod) return -ENOSYS;
+  struct mergerfs_req_ctx ctx;
+  _make_ctx(&ctx);
+  // FSP_FUSE_UF_READONLY = 0x1000 — if set, remove write bits
+  mode_t mode;
+  if(flags & 0x1000)
+    mode = 0444; /* read-only */
+  else
+    mode = 0644; /* writable */
+  return g_ops.chmod(&ctx, path, mode);
+}
+
+static int
 winfsp_chown(const char *path, fuse_uid_t uid, fuse_gid_t gid)
 {
   if(!g_ops.chown) return -ENOSYS;
@@ -792,6 +819,7 @@ winfsp_bridge_run(int argc, char *argv[])
   winfsp_ops.truncate   = winfsp_truncate;
   winfsp_ops.ftruncate  = winfsp_ftruncate;
   winfsp_ops.chmod      = winfsp_chmod;
+  winfsp_ops.chflags    = winfsp_chflags;
   winfsp_ops.chown      = winfsp_chown;
   winfsp_ops.utimens    = winfsp_utimens;
   winfsp_ops.flush      = winfsp_flush;

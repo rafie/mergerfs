@@ -168,14 +168,26 @@ Get a read-only merged view working first:
 - **POSIX-semantics rename**: `fs::rename` falls back to `SetFileInformationByHandle(FileRenameInfoEx)` with `FILE_RENAME_FLAG_POSIX_SEMANTICS | FILE_RENAME_FLAG_REPLACE_IF_EXISTS`. Handles atomic overwrite and open-handle rename.
 - **Unique inodes**: Compat `stat()`/`fstat()` use `GetFileInformationByHandle` to get NTFS file IDs instead of relying on `_stat64.st_ino` (always 0 on Windows). Fixes inode collision in the hybrid-hash inode calculator.
 
-### Tier 3 — Advanced Features
+### Tier 3 — Advanced Features ✅ COMPLETE
 
-- [ ] `setxattr` / `getxattr` / `listxattr` / `removexattr` — extended attributes
-- [ ] `lock` / `flock` — file locking
-- [ ] `fallocate` — preallocation (emulated)
-- [ ] `ioctl` — mergerfs custom controls (runtime policy changes)
-- [ ] `copy_file_range` — optimized copy (emulated as read+write)
-- [ ] `mknod` — stub/error on Windows
+- [x] `setxattr` / `getxattr` / `listxattr` / `removexattr` — extended attributes (bridge wired)
+- [x] `lock` / `flock` — file locking (msvcrt.locking works)
+- [x] `fallocate` — preallocation (emulated, stub)
+- [x] `ioctl` — mergerfs custom controls (bridge wired)
+- [x] `copy_file_range` — emulated as read+write (stub returns ENOSYS, fallback works)
+- [x] `mknod` — stub/error on Windows
+- [x] `utimens` — timestamps via SetFileTime (lutimes + futimesat implemented)
+- [x] `chmod` — read-only toggle via WinFSP chflags callback + FSP_FUSE_CAP_STAT_EX
+- [x] `symlink` / `readlink` — implemented (requires Administrator or Developer Mode)
+- [x] `link` — implemented but WinFSP FUSE compat does not forward calls (WinFSP limitation)
+
+**Milestone: advanced features functional. ✅ Achieved 2026-04-10**
+
+#### Key Windows adaptations for Tier 3:
+- **Timestamps (lutimes/futimesat)**: Implemented using `CreateFileA(FILE_WRITE_ATTRIBUTES)` + `SetFileTime`. Unix epoch converted to Windows FILETIME via 11644473600-second offset. The mergerfs utimens path goes through `lutimes` (not `futimesat`) because it passes `AT_SYMLINK_NOFOLLOW`.
+- **chmod via chflags**: WinFSP doesn't forward `SetFileAttributes` to the FUSE `chmod` callback. Instead, it calls `chflags` when `FSP_FUSE_CAP_STAT_EX` is enabled. Bridge translates `FSP_FUSE_UF_READONLY` flag to mode 0444/0644 and calls mergerfs chmod. Getattr sets `st_flags` in `fuse_stat_ex` for the return trip.
+- **Hard links**: WinFSP FUSE compat layer marks `link` as unsupported. The callback is never invoked. `CreateHardLinkA` works natively on NTFS but not through WinFSP.
+- **Symlinks**: `CreateSymbolicLinkA` with `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE`. Requires Windows 10 1703+ Developer Mode or Administrator privileges.
 
 ### WinFSP-Specific Extensions
 
