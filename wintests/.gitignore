@@ -1,0 +1,6 @@
+# Runtime artifacts — not part of source control
+branch*/
+*.log
+*.exe
+*.obj
+__pycache__/

@@ -32,5 +32,11 @@ rpmbuild/
 mkdocs/venv
 __pycache__/
 
-# MSVC files
+# MSVC / Windows build artifacts
 *.pdb
+*.obj
+*.exe
+*.ilk
+*.idb
+*.lib
+*.exp
