@@ -212,11 +212,13 @@ The policy engine is the heart of mergerfs and is **largely platform-independent
 - Category mapping (create/search/action → policy)
 - Policy algorithms: `all`, `epall`, `mfs`, `lfs`, `epmfs`, `eplfs`, `newest`, `rand`, etc.
 
-### 3.2 Platform-Dependent Adjustments
-- [ ] **Branch path parsing**: MSYS-style paths allow reusing the upstream `:` delimiter unchanged; add `msys_to_native()` / `native_to_msys()` conversion at OS boundary
-- [ ] **Free space queries**: `statvfs` → `GetDiskFreeSpaceEx` (already handled by Phase 1)
-- [ ] **Glob patterns in branch specs**: mergerfs supports `/mnt/disk*` — on Windows this becomes `/d/data*`; expand via `FindFirstFile`/`FindNextFile` after converting to native path
-- [ ] **minfreespace**: works on bytes, should be platform-independent once statvfs is abstracted
+### 3.2 Platform-Dependent Adjustments ✅ COMPLETE
+- [x] **Branch path parsing**: MSYS-style paths via `msys_path::to_native()` / `msys_path::to_msys()` — upstream `:` delimiter reused unchanged
+- [x] **Free space queries**: `statvfs` → `GetDiskFreeSpaceExA` (compat shim in `sys/statvfs.h`); `lstatvfs` uses path-based `statvfs()` on Windows (fstatvfs stub bypassed)
+- [x] **Glob patterns in branch specs**: `compat/glob.h` implements glob via `FindFirstFileA`/`FindNextFileA` with `GLOB_ONLYDIR` filtering; tested with `/c/temp/glob_*` pattern
+- [x] **minfreespace**: platform-independent via statvfs abstraction — all policies correctly query free space
+
+**Milestone: policy system fully functional on Windows. ✅ Verified 2026-04-13**
 
 ---
 

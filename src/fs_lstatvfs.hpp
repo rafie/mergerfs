@@ -39,6 +39,12 @@ namespace fs
   lstatvfs(const std::string &path_,
            struct statvfs    *st_)
   {
+#ifdef _WIN32
+    /* On Windows, fstatvfs(fd) is a stub that returns zeros.
+       Use the path-based statvfs() which calls GetDiskFreeSpaceExA. */
+    int rv = ::statvfs(path_.c_str(),st_);
+    return ((rv < 0) ? -errno : 0);
+#else
     int fd;
     int rv;
 
@@ -51,5 +57,6 @@ namespace fs
     fs::close(fd);
 
     return rv;
+#endif
   }
 }
