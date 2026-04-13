@@ -715,7 +715,8 @@ winfsp_symlink(const char *target, const char *linkpath)
   uint64_t timeout[2] = {};
   _make_ctx(&ctx);
   memset(&cs, 0, sizeof(cs));
-  return g_ops.symlink(&ctx, target, linkpath, &cs, timeout);
+  int rv = g_ops.symlink(&ctx, target, linkpath, &cs, timeout);
+  return rv;
 }
 
 static int

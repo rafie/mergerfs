@@ -55,10 +55,6 @@ namespace msys_path
                 for(size_t i = 2; i < result.size(); i++)
                   if(result[i] == '/') result[i] = '\\';
               }
-            else
-              {
-                result += '\\';
-              }
             return result;
           }
       }

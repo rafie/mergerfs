@@ -187,7 +187,13 @@ Get a read-only merged view working first:
 - **Timestamps (lutimes/futimesat)**: Implemented using `CreateFileA(FILE_WRITE_ATTRIBUTES)` + `SetFileTime`. Unix epoch converted to Windows FILETIME via 11644473600-second offset. The mergerfs utimens path goes through `lutimes` (not `futimesat`) because it passes `AT_SYMLINK_NOFOLLOW`.
 - **chmod via chflags**: WinFSP doesn't forward `SetFileAttributes` to the FUSE `chmod` callback. Instead, it calls `chflags` when `FSP_FUSE_CAP_STAT_EX` is enabled. Bridge translates `FSP_FUSE_UF_READONLY` flag to mode 0444/0644 and calls mergerfs chmod. Getattr sets `st_flags` in `fuse_stat_ex` for the return trip.
 - **Hard links**: WinFSP FUSE compat layer marks `link` as unsupported. The callback is never invoked. `CreateHardLinkA` works natively on NTFS but not through WinFSP.
-- **Symlinks**: `CreateSymbolicLinkA` with `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE`. Requires Windows 10 1703+ Developer Mode or Administrator privileges.
+- **Symlinks**: `CreateSymbolicLinkA` with `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE`. Requires Windows 10 1703+ Developer Mode or Administrator privileges. End-to-end tested (see `wintests/SYMLINK_TEST_PLAN.md`):
+  - Same-branch file and directory symlinks: fully working (lstat, readlink, content traversal)
+  - Cross-branch symlinks (symlink on branch A → file on branch B): fully working through unified namespace
+  - Symlink creation through mount: WinFSP returns ACCESS_DENIED to client despite FUSE callback succeeding (known WinFSP FUSE compat layer limitation)
+  - `lstat` detects reparse points via `GetFileAttributesA` + `CreateFileA(FILE_FLAG_OPEN_REPARSE_POINT)` and reports `S_IFLNK`
+  - `readlink` uses `DeviceIoControl(FSCTL_GET_REPARSE_POINT)` to retrieve symlink target
+  - compat `readdir` (dirent.h) checks `FILE_ATTRIBUTE_REPARSE_POINT` before `FILE_ATTRIBUTE_DIRECTORY` to correctly classify directory symlinks as `DT_LNK`
 
 ### WinFSP-Specific Extensions
 

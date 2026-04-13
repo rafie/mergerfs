@@ -279,13 +279,60 @@ static inline int fstat(int fd, struct stat *buf)
 
 static inline int lstat(const char *path, struct stat *buf)
 {
-  return stat(path, buf);  /* Windows doesn't distinguish symlinks */
+  /* Check if path is a reparse point (symlink / junction) */
+  DWORD attrs = GetFileAttributesA(path);
+  if(attrs != INVALID_FILE_ATTRIBUTES &&
+     (attrs & FILE_ATTRIBUTE_REPARSE_POINT))
+    {
+      /* Open the symlink itself, not its target */
+      HANDLE h = CreateFileA(path, 0,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE | 4,
+                             NULL, OPEN_EXISTING,
+                             FILE_FLAG_BACKUP_SEMANTICS |
+                             FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+      if(h != INVALID_HANDLE_VALUE)
+        {
+          BY_HANDLE_FILE_INFORMATION info;
+          if(GetFileInformationByHandle(h, &info))
+            {
+              memset(buf, 0, sizeof(*buf));
+              buf->st_mode    = S_IFLNK | 0777;
+              buf->st_nlink   = (nlink_t)info.nNumberOfLinks;
+              buf->st_ino     = ((uint64_t)info.nFileIndexHigh << 32) |
+                                info.nFileIndexLow;
+              buf->st_size    = 0;
+              buf->st_blksize = 4096;
+              buf->st_blocks  = 0;
+
+              /* Convert FILETIME → timespec */
+              uint64_t at = ((uint64_t)info.ftLastAccessTime.dwHighDateTime << 32) |
+                            info.ftLastAccessTime.dwLowDateTime;
+              uint64_t mt = ((uint64_t)info.ftLastWriteTime.dwHighDateTime << 32) |
+                            info.ftLastWriteTime.dwLowDateTime;
+              uint64_t ct = ((uint64_t)info.ftCreationTime.dwHighDateTime << 32) |
+                            info.ftCreationTime.dwLowDateTime;
+              buf->st_atim.tv_sec  = (time_t)((at / 10000000ULL) - 11644473600ULL);
+              buf->st_atim.tv_nsec = (long)((at % 10000000ULL) * 100);
+              buf->st_mtim.tv_sec  = (time_t)((mt / 10000000ULL) - 11644473600ULL);
+              buf->st_mtim.tv_nsec = (long)((mt % 10000000ULL) * 100);
+              buf->st_ctim.tv_sec  = (time_t)((ct / 10000000ULL) - 11644473600ULL);
+              buf->st_ctim.tv_nsec = (long)((ct % 10000000ULL) * 100);
+            }
+          CloseHandle(h);
+          return 0;
+        }
+    }
+
+  /* Not a symlink or detection failed — fall through to stat */
+  return stat(path, buf);
 }
 
 static inline int fstatat(int dirfd, const char *path,
                           struct stat *buf, int flags)
 {
-  (void)dirfd; (void)flags;
+  (void)dirfd;
+  if(flags & 0x100) /* AT_SYMLINK_NOFOLLOW */
+    return lstat(path, buf);
   return stat(path, buf);
 }
 

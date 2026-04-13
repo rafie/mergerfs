@@ -91,10 +91,10 @@ static inline struct dirent *readdir(DIR *d)
   d->_entry.d_name[NAME_MAX] = '\0';
   d->_entry.d_ino = 0;
 
-  if(d->_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-    d->_entry.d_type = DT_DIR;
-  else if(d->_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+  if(d->_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
     d->_entry.d_type = DT_LNK;
+  else if(d->_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    d->_entry.d_type = DT_DIR;
   else
     d->_entry.d_type = DT_REG;
 

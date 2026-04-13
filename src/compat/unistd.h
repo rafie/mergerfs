@@ -464,14 +464,20 @@ static inline int getpriority(int which, int who)
 
 static inline int symlink(const char *target, const char *linkpath)
 {
-  /* SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE = 0x2 (Win10 1703+ Developer Mode) */
-  DWORD flags = 0x2;
   /* Check if target looks like a directory */
+  DWORD dirflag = 0;
   DWORD attrs = GetFileAttributesA(target);
   if(attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
-    flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
-  if(CreateSymbolicLinkA(linkpath, target, flags))
+    dirflag = SYMBOLIC_LINK_FLAG_DIRECTORY;
+
+  /* Try unprivileged symlink first (Win10 1703+ Developer Mode) */
+  if(CreateSymbolicLinkA(linkpath, target, dirflag | 0x2))
     return 0;
+
+  /* Retry without ALLOW_UNPRIVILEGED_CREATE for admin or older builds */
+  if(CreateSymbolicLinkA(linkpath, target, dirflag))
+    return 0;
+
   DWORD err = GetLastError();
   if(err == ERROR_PRIVILEGE_NOT_HELD || err == ERROR_ACCESS_DENIED)
     errno = EPERM;
