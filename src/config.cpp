@@ -23,6 +23,9 @@
 #include "nonstd/string.hpp"
 #include "str.hpp"
 #include "version.hpp"
+#ifdef _WIN32
+#include "msys_path.hpp"
+#endif
 
 #include <fstream>
 #include <string>
@@ -430,7 +433,12 @@ Config::from_file(const std::string &filepath_)
   std::ifstream ifstrm;
 
   errno = 0;
+#ifdef _WIN32
+  std::string native = msys_path::to_native(filepath_);
+  ifstrm.open(native);
+#else
   ifstrm.open(filepath_);
+#endif
   if(!ifstrm.good())
     {
       errno = errno ? errno : EIO;

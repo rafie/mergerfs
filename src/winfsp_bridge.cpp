@@ -44,6 +44,9 @@
 #include <string>
 #include <vector>
 
+// Sentinel file handle for the .mergerfs virtual control file
+static const uint64_t CTRL_FILE_FH = 0xCF01CF01CF01CF01ULL;
+
 // ---------------------------------------------------------------------------
 // Mergerfs request context — matches vendored fuse_req_ctx.h
 // ---------------------------------------------------------------------------
@@ -244,6 +247,30 @@ _compat_to_fuse_statvfs(const struct compat_statvfs *cs,
 }
 
 
+// ---------------------------------------------------------------------------
+// Helper: strip leading '/' from WinFSP paths to match vendored libfuse
+// convention.  The vendored libfuse passes &fusepath[1] to all mergerfs
+// callbacks, so "/" becomes "" and "/foo" becomes "foo".
+// ---------------------------------------------------------------------------
+static
+const char *
+_strip_leading_slash(const char *path)
+{
+  if(path && path[0] == '/')
+    return path + 1;
+  return path;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: check if a (stripped) path is the .mergerfs control file.
+// ---------------------------------------------------------------------------
+static
+bool
+_is_ctrl_file(const char *stripped)
+{
+  return (stripped && strcmp(stripped, ".mergerfs") == 0);
+}
+
 // ===========================================================================
 // WinFSP adapter callbacks
 // ===========================================================================
@@ -260,7 +287,7 @@ winfsp_getattr(const char *path, struct fuse_stat *stbuf)
   _make_ctx(&ctx);
   memset(&cs, 0, sizeof(cs));
 
-  int rv = g_ops.getattr(&ctx, path, &cs, timeout);
+  int rv = g_ops.getattr(&ctx, _strip_leading_slash(path), &cs, timeout);
   if(rv == 0)
     {
       // On Windows, override uid/gid to match the requesting user.
@@ -329,7 +356,7 @@ winfsp_opendir(const char *path, struct fuse_file_info *fi)
   _make_ctx(&ctx);
   _winfsp_to_mergerfs_fi(fi, &mfi);
 
-  int rv = g_ops.opendir(&ctx, path, &mfi);
+  int rv = g_ops.opendir(&ctx, _strip_leading_slash(path), &mfi);
   if(rv == 0)
     _mergerfs_to_winfsp_fi(&mfi, fi);
 
@@ -457,7 +484,18 @@ winfsp_open(const char *path, struct fuse_file_info *fi)
   _make_ctx(&ctx);
   _winfsp_to_mergerfs_fi(fi, &mfi);
 
-  int rv = g_ops.open(&ctx, path, &mfi);
+  const char *sp = _strip_leading_slash(path);
+
+  // .mergerfs is a virtual control file — it doesn't exist on any
+  // branch.  Return success with a sentinel fh so WinFSP can stat it.
+  if(_is_ctrl_file(sp))
+    {
+      fi->fh = CTRL_FILE_FH;
+      fi->direct_io = 1;
+      return 0;
+    }
+
+  int rv = g_ops.open(&ctx, sp, &mfi);
   if(rv == 0)
     _mergerfs_to_winfsp_fi(&mfi, fi);
 
@@ -467,6 +505,9 @@ winfsp_open(const char *path, struct fuse_file_info *fi)
 static int
 winfsp_release(const char *path, struct fuse_file_info *fi)
 {
+  if(fi && fi->fh == CTRL_FILE_FH)
+    return 0;
+
   if(!g_ops.release) return 0;
 
   (void)path;
@@ -487,6 +528,9 @@ winfsp_read(const char            *path,
             fuse_off_t             off,
             struct fuse_file_info *fi)
 {
+  if(fi && fi->fh == CTRL_FILE_FH)
+    return 0;
+
   if(!g_ops.read) return -ENOSYS;
 
   (void)path;
@@ -511,7 +555,7 @@ winfsp_statfs(const char *path, struct fuse_statvfs *stbuf)
   _make_ctx(&ctx);
   memset(&csv, 0, sizeof(csv));
 
-  int rv = g_ops.statfs(&ctx, path, &csv);
+  int rv = g_ops.statfs(&ctx, _strip_leading_slash(path), &csv);
   if(rv == 0)
     _compat_to_fuse_statvfs(&csv, stbuf);
 
@@ -526,7 +570,11 @@ winfsp_access(const char *path, int mask)
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
 
-  return g_ops.access(&ctx, path, mask);
+  const char *sp = _strip_leading_slash(path);
+  if(_is_ctrl_file(sp))
+    return 0;
+
+  return g_ops.access(&ctx, sp, mask);
 }
 
 // ---------------------------------------------------------------------------
@@ -561,7 +609,7 @@ winfsp_create(const char *path, fuse_mode_t mode, struct fuse_file_info *fi)
   _make_ctx(&ctx);
   _winfsp_to_mergerfs_fi(fi, &mfi);
 
-  int rv = g_ops.create(&ctx, path, mode, &mfi);
+  int rv = g_ops.create(&ctx, _strip_leading_slash(path), mode, &mfi);
   if(rv == 0)
     _mergerfs_to_winfsp_fi(&mfi, fi);
 
@@ -574,7 +622,7 @@ winfsp_mkdir(const char *path, fuse_mode_t mode)
   if(!g_ops.mkdir) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.mkdir(&ctx, path, mode);
+  return g_ops.mkdir(&ctx, _strip_leading_slash(path), mode);
 }
 
 static int
@@ -583,7 +631,7 @@ winfsp_unlink(const char *path)
   if(!g_ops.unlink) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.unlink(&ctx, path);
+  return g_ops.unlink(&ctx, _strip_leading_slash(path));
 }
 
 static int
@@ -592,7 +640,7 @@ winfsp_rmdir(const char *path)
   if(!g_ops.rmdir) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.rmdir(&ctx, path);
+  return g_ops.rmdir(&ctx, _strip_leading_slash(path));
 }
 
 static int
@@ -601,7 +649,7 @@ winfsp_rename(const char *oldpath, const char *newpath)
   if(!g_ops.rename) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.rename(&ctx, oldpath, newpath);
+  return g_ops.rename(&ctx, _strip_leading_slash(oldpath), _strip_leading_slash(newpath));
 }
 
 static int
@@ -610,7 +658,7 @@ winfsp_truncate(const char *path, fuse_off_t size)
   if(!g_ops.truncate) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.truncate(&ctx, path, size);
+  return g_ops.truncate(&ctx, _strip_leading_slash(path), size);
 }
 
 static int
@@ -629,7 +677,7 @@ winfsp_chmod(const char *path, fuse_mode_t mode)
   if(!g_ops.chmod) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.chmod(&ctx, path, mode);
+  return g_ops.chmod(&ctx, _strip_leading_slash(path), mode);
 }
 
 static int
@@ -644,7 +692,7 @@ winfsp_chflags(const char *path, uint32_t flags)
     mode = 0444; /* read-only */
   else
     mode = 0644; /* writable */
-  return g_ops.chmod(&ctx, path, mode);
+  return g_ops.chmod(&ctx, _strip_leading_slash(path), mode);
 }
 
 static int
@@ -653,7 +701,7 @@ winfsp_chown(const char *path, fuse_uid_t uid, fuse_gid_t gid)
   if(!g_ops.chown) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.chown(&ctx, path, uid, gid);
+  return g_ops.chown(&ctx, _strip_leading_slash(path), uid, gid);
 }
 
 static int
@@ -672,12 +720,14 @@ winfsp_utimens(const char *path, const struct fuse_timespec tv[2])
       cts[1].tv_sec  = tv[1].tv_sec;
       cts[1].tv_nsec = (long)tv[1].tv_nsec;
     }
-  return g_ops.utimens(&ctx, path, tv ? cts : NULL);
+  return g_ops.utimens(&ctx, _strip_leading_slash(path), tv ? cts : NULL);
 }
 
 static int
 winfsp_flush(const char *path, struct fuse_file_info *fi)
 {
+  if(fi && fi->fh == CTRL_FILE_FH)
+    return 0;
   if(!g_ops.flush) return 0;
   (void)path;
   struct mergerfs_req_ctx ctx;
@@ -703,7 +753,7 @@ winfsp_readlink(const char *path, char *buf, size_t size)
   if(!g_ops.readlink) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.readlink(&ctx, path, buf, size);
+  return g_ops.readlink(&ctx, _strip_leading_slash(path), buf, size);
 }
 
 static int
@@ -715,7 +765,7 @@ winfsp_symlink(const char *target, const char *linkpath)
   uint64_t timeout[2] = {};
   _make_ctx(&ctx);
   memset(&cs, 0, sizeof(cs));
-  int rv = g_ops.symlink(&ctx, target, linkpath, &cs, timeout);
+  int rv = g_ops.symlink(&ctx, target, _strip_leading_slash(linkpath), &cs, timeout);
   return rv;
 }
 
@@ -728,7 +778,7 @@ winfsp_link(const char *oldpath, const char *newpath)
   uint64_t timeout[2] = {};
   _make_ctx(&ctx);
   memset(&cs, 0, sizeof(cs));
-  return g_ops.link(&ctx, oldpath, newpath, &cs, timeout);
+  return g_ops.link(&ctx, _strip_leading_slash(oldpath), _strip_leading_slash(newpath), &cs, timeout);
 }
 
 // ---------------------------------------------------------------------------
@@ -741,7 +791,7 @@ winfsp_getxattr(const char *path, const char *name, char *value, size_t size)
   if(!g_ops.getxattr) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.getxattr(&ctx, path, name, value, size);
+  return g_ops.getxattr(&ctx, _strip_leading_slash(path), name, value, size);
 }
 
 static int
@@ -751,7 +801,7 @@ winfsp_setxattr(const char *path, const char *name,
   if(!g_ops.setxattr) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.setxattr(&ctx, path, name, value, size, flags);
+  return g_ops.setxattr(&ctx, _strip_leading_slash(path), name, value, size, flags);
 }
 
 static int
@@ -760,7 +810,7 @@ winfsp_listxattr(const char *path, char *list, size_t size)
   if(!g_ops.listxattr) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.listxattr(&ctx, path, list, size);
+  return g_ops.listxattr(&ctx, _strip_leading_slash(path), list, size);
 }
 
 static int
@@ -769,7 +819,7 @@ winfsp_removexattr(const char *path, const char *name)
   if(!g_ops.removexattr) return -ENOSYS;
   struct mergerfs_req_ctx ctx;
   _make_ctx(&ctx);
-  return g_ops.removexattr(&ctx, path, name);
+  return g_ops.removexattr(&ctx, _strip_leading_slash(path), name);
 }
 
 static int

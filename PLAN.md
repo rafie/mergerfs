@@ -222,9 +222,9 @@ The policy engine is the heart of mergerfs and is **largely platform-independent
 
 ---
 
-## Phase 4: Configuration & CLI
+## Phase 4: Configuration & CLI ✅ COMPLETE
 
-### 4.1 Command-Line Interface
+### 4.1 Command-Line Interface ✅
 ```
 # Linux:
 mergerfs -o branches=/a:/b:/c,policy=mfs /mnt/merged
@@ -232,22 +232,39 @@ mergerfs -o branches=/a:/b:/c,policy=mfs /mnt/merged
 # Windows (identical syntax thanks to MSYS-style paths):
 mergerfs.exe -o branches=/d/a:/e/b:/f/c,policy=mfs /m
 ```
+- CLI argument parsing works: `-o allow_other,category.create=ff` etc.
+- `-v` (version) and `-h` (help) flags work correctly
+- MSYS-style paths converted at OS boundary via `msys_path::to_native()`
 
-### 4.2 Config File Support
-Add optional config file (`mergerfs.conf` or `mergerfs.ini`) since Windows users don't have `/etc/fstab`:
-```ini
-[mergerfs]
-branches = /d/media:/e/media:/f/media
-mount = /m
-policy = mfs
-minfreespace = 10G
-```
+### 4.2 Config File Support ✅
+- `-o config=/c/temp/file.conf` loads config file correctly
+- **Fix**: Added `msys_path::to_native()` conversion in `Config::from_file` (src/config.cpp)
+  so MSYS-style paths are converted before `ifstream::open()`
+- Policies from config files are applied correctly (e.g. `category.create=ff`)
 
-### 4.3 Runtime Control
+### 4.3 .mergerfs Control File ✅
+- `.mergerfs` virtual control file is now accessible via `os.path.exists()`, `os.stat()`, etc.
+- **Fixes applied**:
+  1. WinFSP bridge path stripping: Added `_strip_leading_slash()` to all callbacks in
+     `winfsp_bridge.cpp` to match vendored libfuse's `&fusepath[1]` convention
+  2. Control file open/access/release/read: WinFSP requires `open()` to succeed for a file
+     to be accessible. On Linux, `stat()` only calls FUSE getattr (which handles `.mergerfs`),
+     but on Windows, WinFSP calls both getattr AND open. Since `.mergerfs` is virtual and
+     doesn't exist on any branch, `open()` returned ENOENT. Fixed by intercepting the control
+     file path in the bridge's open/access/release/read callbacks with a sentinel file handle.
+
+### 4.4 Runtime Control (Deferred)
 Linux mergerfs uses custom `ioctl` and `xattr` on the mount point for runtime config changes. On Windows:
 - Option A: Named pipe (`\\.\pipe\mergerfs-control`)
 - Option B: `DeviceIoControl` via WinFSP's ioctl support
 - Option C: CLI tool (`mergerfs-ctl.exe`) that communicates via one of the above
+
+### Test Results
+All 11/11 tests pass (`wintests/test_phase4_config_cli.py`):
+- CLI argument parsing: 3/3
+- Config file loading: 3/3
+- .mergerfs control file: 3/3
+- Version/help flags: 2/2
 
 ---
 
