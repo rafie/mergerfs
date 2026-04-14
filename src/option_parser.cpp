@@ -343,6 +343,25 @@ namespace options
     ::_set_default_options(args_);
     ::_set_fsname(args_);
     ::_set_subtype(args_);
+#ifdef _WIN32
+    // Set volume label and filesystem type for Windows Explorer.
+    // Only set defaults if the user didn't already specify them.
+    {
+      bool has_volname = false;
+      bool has_fsname_win = false;
+      for(int i = 0; i < args_->argc; i++)
+        {
+          if(args_->argv[i] && strstr(args_->argv[i],"volname="))
+            has_volname = true;
+          if(args_->argv[i] && strstr(args_->argv[i],"FileSystemName="))
+            has_fsname_win = true;
+        }
+      if(!has_volname)
+        ::_set_kv_option("volname","MergerFS",args_);
+      if(!has_fsname_win)
+        ::_set_kv_option("FileSystemName","mergerfs",args_);
+    }
+#endif
     ::_cleanup_options();
 
     cfg.finish_initializing();
